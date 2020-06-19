@@ -42,37 +42,6 @@ from nltk import word_tokenize
 import cv2
 from PyPDF2 import PdfFileWriter, PdfFileReader
 
-#%% Load and clean data
-
-#Eventually need to insert dialog boxes for excelName and dataPath
-#for now, I'll hard code it in. 
-
-Client = 'KODA'
-County = 'Williams'
-
-dataPath = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/'
-excelName = 'KODA_Union_Leases.xlsx'
-
-#Load the data and remove the carriage returns
-klData = pd.read_excel(os.path.join(dataPath, excelName))
-
-klData = klData.replace(r'\n', ' ', regex = True)
-
-#Add Columns for T, R, S, Desc, and MOR
-
-klData.insert(2, 'Township', np.nan)
-klData.insert(3, 'Range', np.nan)
-klData.insert(4, 'Sec', np.nan)
-klData.insert(5, 'Legal', np.nan)
-klData.insert(6, 'MOR', np.nan)
-# Insert a column for mineral interest and NMA from MOR
-
-klData.insert(klData.columns.get_loc('NetAcresAdding')+1, 'MineralInterest', np.nan)
-klData.insert(klData.columns.get_loc('MineralInterest')+1, 'MORCalcNMA', np.nan)
-del klData['MarkProblemGraphic']
-del klData['Description_Lease']
-
-data = pd.DataFrame(columns = klData.columns)
 
 #%% Convert the .doc files to .docx Code borrowed from StackOverflow
 
@@ -223,118 +192,6 @@ def readMOR(Client, County, T, R, S, desc, recNum, bkPg):
 
     return MI, NMA, MOR                  
 
-
-
-#%% Parse the legal to create a full legal for each line
-
-for row in range(0,klData.shape[0]):
-    legal = klData.iloc[row, klData.columns.get_loc('Description_Lease_2')]
-    print(legal)
-    #TRS will be the data preceeding the first instance of Sec.
-    TRS = legal[0:legal.find('Sec')-1]
-    #Township and Range split
-    T = TRS.split('-')[0]; R = TRS.split('-')[1]
-    #The legal will be everything commencing with first instance of 'Sec'
-    legal = legal[legal.find('Sec')::]
-    #We need the county on a lease basis
-    County = klData.iloc[row, klData.columns.get_loc('PROSPECT::prospect county calc')].split(' ')[0]
-    for Section in range(0, legal.count('Sec')):
-        #For each section, find the legal for the first section
-        #If there is more than one section in legal if not just grab
-        #the section legal
-        if legal.count('Sec') > 1:
-            #If there is more than one section, then we only want the string from the first section to the beginning of the next
-            Sec = legal[0:legal[1::].find('Sec')]
-            #Trim the legal of the first sec for processing subsequent sections recursively
-            legal = legal[legal.find('Sec')+1::]
-            #print('more than one Sec: ' + Sec)
-        else:
-            #If there is only one section, then we don't need to trim the string
-            Sec = legal
-            #print('one section: ' + Sec)
-        S = Sec[3:Sec.find(":")]
-        S = S.lstrip()
-        if len(S) < 2:
-            S = '0'+S
-        legal = legal[legal.find('Sec')::]
-        desc = Sec[Sec.find(':')+2::]
-        #Copy the data from the KL Data set to append into the new data set
-        newRow = klData.loc[klData['LeaseNumberCalc'] == klData.iloc[row, klData.columns.get_loc('LeaseNumberCalc')]]
-        #If there is no Rec Number, then replace the NaN with 999999
-        if not math.isnan(klData.iloc[row, klData.columns.get_loc('RecordingInfo')]):
-            lease = str(int(klData.iloc[row, klData.columns.get_loc('RecordingInfo')]))
-        else:
-            lease = '999999'
-        try:
-            MI, NMA, MOR = readMOR(Client, County, T, R, S, desc, lease, 'BkPg')
-        except:
-            MI = 'No MOR Found'
-            NMA = 'No MOR Found'
-            MOR = 'No MOR Found'
-            print('Unable to process lease ' + lease)
-        newRow['Township'] = T
-        newRow['Range'] = R
-        newRow['Sec'] = S
-        newRow['Legal'] = desc
-        newRow.iloc[0,newRow.columns.get_loc('MineralInterest')] = MI
-        newRow['MORCalcNMA'] = NMA
-        newRow['MOR'] = MOR
-        #print('New Leagal is: '+T+R+S+desc)
-        data = data.append(newRow, ignore_index = True)
-        
-
-
-
-#%%Search the MOR breakout for the lease information
-
-# #We will need to search the breakout for the Rec Num OR Bk/Pg              
-
-# leases = ['855432','855431', '856129', '856137', '856136', '857349',
-# '857820', '857819', '857818', '857343', '861406', '861404', '857813',
-# '857815', '857816', '857814', '861393', '861392', '867460']
-
-# for lease in leases:
-#     MI, NMA = readMOR('KODA', 'Williams', legal, lease, 'BkPg')
-#     print('For lease: ' + lease + ' the MOR mineral interest is ' + str(MI) + ' with an NMA of ' + str(NMA))
-    
-
-# recNum = str(int(klData.iloc[338, klData.columns.get_loc('RecordingInfo')]))
-# bkPg = klData.iloc[338, klData.columns.get_loc('LeaseNumberCalc')]
-
-# #Search the breakout for the rec number then search backwards for the ownerhip percentage
-
-# #MI = breakout.rfind('%', 0, breakout.find('recNum'))
-
-
-
-
-#%% Save data in excel
-#del data['Description_Lease']
-del data['Description_Lease_2']
-
-newExcelName = 'KODA_UNION_LEASES_NEW_FORMAT.xlsx'
-data.to_excel(os.path.join(dataPath, newExcelName), index = False)
-
-#%%
-
-# for tNum, table in enumerate(doc.tables):
-#         for rNum, row in enumerate(table.rows):
-#             print('Row Number: ' + str(rNum))
-#             for cNum, cell in enumerate(row.cells):
-#                 for para in cell.paragraphs:
-#                     #print(para.text)
-#                     if para.text.count(lease):
-#                         print('lease found in row number ' + str(rNum))
-
-#%% Write a routine that will create a copy of the LPRs on local drive
-
-
-
-
-#fileList = [f for f in listdir('C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs') if isfile(join('C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs', f))]
-#path = os.path.join('C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs', fileList[0])
-
-
 #%% Define the read LPR function
 
 ''' This function will read in Keyland LPRs to extract owner phone numbers, 
@@ -433,8 +290,47 @@ def grabPages(inPath, outPath, numPages):
     with open(outPath, "wb") as outputStream:
         output.write(outputStream)
         
+#%% Define a stringNumSearch function to locate the beginning and a number in a string
+''' This function will take a string input and output the beginning 
+and end locations of a number with '-' delimeters. It will do this 
+using a while loop and an interValue passed (neg or pos)'''
+def stringNumSearch(string, delim, iterVal):
+    # The tax ID could be in one of two formats: EIN XX-XXXXXX or SSN XXX-XX-XXXX. This search
+    # should be able to handle both cases. First slice the text, then search
+    # forward for the next instance of '-' which shuold be a delimeter in the 
+    # tax ID. Then search backward from the delimeter checking each element
+    # to determine if it is a digit. If you encounter two consecutive characters
+    # that are not digits, then you have found the end of the ID. Add two to the 
+    # index and we have the beginning. Similar process to find the end. This
+    # should also work just fine for phone numbers.
+    if string.count(delim) > 0 and string[string.find(delim)+1].isdigit() and string[string.find(delim)-1].isdigit():
+       #for simplicity in code we'll define a vaiable with the Num loc
+       numLoc = string.find(delim)
+       #initialize a counter of non-digit elements
+       notDigit = 0
+       #initialize a counter for the while loop
+       numSearch = iterVal
+       while notDigit < 2:
+           idStart = numLoc+numSearch
+           if not string[idStart].isdigit():
+               notDigit += 1
+           numSearch += iterVal
+       end = idStart
+       notDigit = 0
+       #initialize a counter for the while loop
+       numSearch = iterVal
+       while notDigit < 2:
+           idStart = numLoc+numSearch
+           if not string[idStart].isdigit():
+               notDigit += 1
+           numSearch += (-iterVal)
+       beg = idStart + 1
+       return string[beg:end]
+    else:
+       print('Error, the string passed does not caontain a valid number sequence')
+       
 
-#%%
+#%% Snip of code to run the grab pages function
 
 getPages =False
 
@@ -446,14 +342,20 @@ if getPages:
         grabPages(path, 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs', 2)
     
 #%% Run the OCR
-path = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs' 
-paths =[f for f in glob(path + '/**\\*.pdf', recursive=True)]
 
-for path in paths[0:2]:
-    print('Processing: ' + path)
-    LPROCR(path, 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs/LPG_Texts')
+runOCR = False
+
+if runOCR:
+    path = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs' 
+    paths =[f for f in glob(path + '/**\\*.pdf', recursive=True)]
     
-#%%Read the output from the OCR
+    for path in paths:
+        print('Processing: ' + path)
+        LPROCR(path, 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs/LPG_Texts')
+
+#%% If needed re-name the files once OCRed to include RecNum
+
+LPRTextRename = True
 
 #Find the LPGs on the M Drive:
 path = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs' 
@@ -461,5 +363,157 @@ path = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs'
 #paths =[f for f in glob(path + '/**\\*.pdf', recursive=True) if 'Final Lease Package Sent' in f]
 paths =[f for f in glob(path + '/**\\*.txt', recursive=True)]
 
-with open(paths[0], 'r', errors='ignore') as file:
+for path in paths:
+    with open(path, 'r', errors='ignore') as file:
+        text = file.read()#.replace('\n', '')
+        #Define a parameter to find the first string of 6 digits after the Bk-Pg
+        #character. That will be the rec num.
+        recLoc = text.find('Bk-Pg')
+        if recLoc !=0:
+            recFound = False
+            numIter = 0
+            while not recFound:
+                if text[recLoc:recLoc+6].isdigit():
+                    recNum = text[recLoc:recLoc+6]
+                    recFound = True
+                numIter += 1
+                recLoc += 1
+                if numIter == 100:
+                    #if the num iters is high, then break out of the while loop. 
+                    recNum = np.nan
+                    break
+    try:
+        recNum = int(recNum)
+        if not math.isnan(int(recNum)):
+            print('Renaming file: ' + path)
+            print('New file name: ' + path[0:path.find('.txt')]+str(recNum)+'.txt')
+        
+            os.rename(path, os.path.abspath(path[0:path.find('.txt')]+str(recNum)+'.txt'))
+        else:
+            print('No reception number found for: ' + path)
+    except:
+        print('No Rec Number found for file: ' + path)
+    
+    try:
+        basePath = path[0:path.rfind('\\')]
+        fileName = path[path.rfind('\\')+1::]
+        shutil.move(path, os.path.abspath(basePath + '/' + 'No_Rec_Num/' + fileName))
+    except:
+        print('Counld Not Move: ' + path)
+        
+
+        
+#%%Function to read the output from the OCRed LPRs 
+
+#Find the LPGs on the M Drive:
+path = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs' 
+
+#paths =[f for f in glob(path + '/**\\*.pdf', recursive=True) if 'Final Lease Package Sent' in f]
+paths =[f for f in glob(path + '/**\\*.txt', recursive=True)]
+
+with open(paths[1], 'r', errors='ignore') as file:
     text = file.read()#.replace('\n', '')
+    # Create a slice of the text to search for Tax ID number. 
+    taxSlice = text[text.find('Tax')::]
+    taxID = stringNumSearch(taxSlice, '-', 1)
+    # If the first '-' is not bounded by digits then we have an exception
+    phoneSlice = text[text.find('Phone')::]
+    phoneNum = stringNumSearch(phoneSlice, '-', 1)
+
+#%% Load and clean data
+
+#Eventually need to insert dialog boxes for excelName and dataPath
+#for now, I'll hard code it in. 
+
+Client = 'KODA'
+County = 'Williams'
+
+dataPath = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/'
+excelName = 'KODA_Union_Leases.xlsx'
+
+#Load the data and remove the carriage returns
+klData = pd.read_excel(os.path.join(dataPath, excelName))
+
+klData = klData.replace(r'\n', ' ', regex = True)
+
+#Add Columns for T, R, S, Desc, and MOR
+
+klData.insert(2, 'Township', np.nan)
+klData.insert(3, 'Range', np.nan)
+klData.insert(4, 'Sec', np.nan)
+klData.insert(5, 'Legal', np.nan)
+klData.insert(6, 'MOR', np.nan)
+# Insert a column for mineral interest and NMA from MOR
+
+klData.insert(klData.columns.get_loc('NetAcresAdding')+1, 'MineralInterest', np.nan)
+klData.insert(klData.columns.get_loc('MineralInterest')+1, 'MORCalcNMA', np.nan)
+del klData['MarkProblemGraphic']
+del klData['Description_Lease']
+
+data = pd.DataFrame(columns = klData.columns)
+
+#%% Parse the legal to create a full legal for each line
+
+for row in range(0,klData.shape[0]):
+    legal = klData.iloc[row, klData.columns.get_loc('Description_Lease_2')]
+    print(legal)
+    #TRS will be the data preceeding the first instance of Sec.
+    TRS = legal[0:legal.find('Sec')-1]
+    #Township and Range split
+    T = TRS.split('-')[0]; R = TRS.split('-')[1]
+    #The legal will be everything commencing with first instance of 'Sec'
+    legal = legal[legal.find('Sec')::]
+    #We need the county on a lease basis
+    County = klData.iloc[row, klData.columns.get_loc('PROSPECT::prospect county calc')].split(' ')[0]
+    for Section in range(0, legal.count('Sec')):
+        #For each section, find the legal for the first section
+        #If there is more than one section in legal if not just grab
+        #the section legal
+        if legal.count('Sec') > 1:
+            #If there is more than one section, then we only want the string from the first section to the beginning of the next
+            Sec = legal[0:legal[1::].find('Sec')]
+            #Trim the legal of the first sec for processing subsequent sections recursively
+            legal = legal[legal.find('Sec')+1::]
+            #print('more than one Sec: ' + Sec)
+        else:
+            #If there is only one section, then we don't need to trim the string
+            Sec = legal
+            #print('one section: ' + Sec)
+        S = Sec[3:Sec.find(":")]
+        S = S.lstrip()
+        if len(S) < 2:
+            S = '0'+S
+        legal = legal[legal.find('Sec')::]
+        desc = Sec[Sec.find(':')+2::]
+        #Copy the data from the KL Data set to append into the new data set
+        newRow = klData.loc[klData['LeaseNumberCalc'] == klData.iloc[row, klData.columns.get_loc('LeaseNumberCalc')]]
+        #If there is no Rec Number, then replace the NaN with 999999
+        if not math.isnan(klData.iloc[row, klData.columns.get_loc('RecordingInfo')]):
+            lease = str(int(klData.iloc[row, klData.columns.get_loc('RecordingInfo')]))
+        else:
+            lease = '999999'
+        try:
+            MI, NMA, MOR = readMOR(Client, County, T, R, S, desc, lease, 'BkPg')
+        except:
+            MI = 'No MOR Found'
+            NMA = 'No MOR Found'
+            MOR = 'No MOR Found'
+            print('Unable to process lease ' + lease)
+        newRow['Township'] = T
+        newRow['Range'] = R
+        newRow['Sec'] = S
+        newRow['Legal'] = desc
+        newRow.iloc[0,newRow.columns.get_loc('MineralInterest')] = MI
+        newRow['MORCalcNMA'] = NMA
+        newRow['MOR'] = MOR
+        #print('New Leagal is: '+T+R+S+desc)
+        data = data.append(newRow, ignore_index = True)
+
+#%% Save data in excel
+#del data['Description_Lease']
+del data['Description_Lease_2']
+
+newExcelName = 'KODA_UNION_LEASES_NEW_FORMAT.xlsx'
+data.to_excel(os.path.join(dataPath, newExcelName), index = False)
+
+    
