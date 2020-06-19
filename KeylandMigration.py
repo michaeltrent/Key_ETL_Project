@@ -343,9 +343,10 @@ if getPages:
     
 #%% Run the OCR
 
-runOCR = False
+runOCR = True
 
 if runOCR:
+    
     path = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs' 
     paths =[f for f in glob(path + '/**\\*.pdf', recursive=True)]
     
@@ -405,20 +406,20 @@ for path in paths:
         
 #%%Function to read the output from the OCRed LPRs 
 
-#Find the LPGs on the M Drive:
-path = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs' 
+# #Find the LPGs on the M Drive:
+# path = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs' 
 
-#paths =[f for f in glob(path + '/**\\*.pdf', recursive=True) if 'Final Lease Package Sent' in f]
-paths =[f for f in glob(path + '/**\\*.txt', recursive=True)]
+# #paths =[f for f in glob(path + '/**\\*.pdf', recursive=True) if 'Final Lease Package Sent' in f]
+# paths =[f for f in glob(path + '/**\\*.txt', recursive=True)]
 
-with open(paths[1], 'r', errors='ignore') as file:
-    text = file.read()#.replace('\n', '')
-    # Create a slice of the text to search for Tax ID number. 
-    taxSlice = text[text.find('Tax')::]
-    taxID = stringNumSearch(taxSlice, '-', 1)
-    # If the first '-' is not bounded by digits then we have an exception
-    phoneSlice = text[text.find('Phone')::]
-    phoneNum = stringNumSearch(phoneSlice, '-', 1)
+# with open(paths[1], 'r', errors='ignore') as file:
+#     text = file.read()#.replace('\n', '')
+#     # Create a slice of the text to search for Tax ID number. 
+#     taxSlice = text[text.find('Tax')::]
+#     taxID = stringNumSearch(taxSlice, '-', 1)
+#     # If the first '-' is not bounded by digits then we have an exception
+#     phoneSlice = text[text.find('Phone')::]
+#     phoneNum = stringNumSearch(phoneSlice, '-', 1)
 
 #%% Load and clean data
 
@@ -443,6 +444,8 @@ klData.insert(3, 'Range', np.nan)
 klData.insert(4, 'Sec', np.nan)
 klData.insert(5, 'Legal', np.nan)
 klData.insert(6, 'MOR', np.nan)
+klData.insert(7, 'Phone Number', np.nan)
+klData.insert(8, 'Tax ID', np.nan)
 # Insert a column for mineral interest and NMA from MOR
 
 klData.insert(klData.columns.get_loc('NetAcresAdding')+1, 'MineralInterest', np.nan)
@@ -453,6 +456,9 @@ del klData['Description_Lease']
 data = pd.DataFrame(columns = klData.columns)
 
 #%% Parse the legal to create a full legal for each line
+
+LPRpath = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs' 
+LPRpaths =[f for f in glob(path + '/**\\*.txt', recursive=True)]
 
 for row in range(0,klData.shape[0]):
     legal = klData.iloc[row, klData.columns.get_loc('Description_Lease_2')]
@@ -499,6 +505,20 @@ for row in range(0,klData.shape[0]):
             NMA = 'No MOR Found'
             MOR = 'No MOR Found'
             print('Unable to process lease ' + lease)
+        try:
+            for path in LPRpaths:
+                if path.count(lease):
+                    with open(path, 'r', errors='ignore') as file:
+                        text = file.read()
+                        # Create a slice of the text to search for Tax ID number. 
+                        taxSlice = text[text.find('Tax')::]
+                        taxID = stringNumSearch(taxSlice, '-', 1)
+                        # If the first '-' is not bounded by digits then we have an exception
+                        phoneSlice = text[text.find('Phone')::]
+                        phoneNum = stringNumSearch(phoneSlice, '-', 1)
+        except:
+            phoneNum = np.nan
+            taxID = np.nan
         newRow['Township'] = T
         newRow['Range'] = R
         newRow['Sec'] = S
@@ -506,6 +526,8 @@ for row in range(0,klData.shape[0]):
         newRow.iloc[0,newRow.columns.get_loc('MineralInterest')] = MI
         newRow['MORCalcNMA'] = NMA
         newRow['MOR'] = MOR
+        newRow['Phone Number'] = phoneNum
+        newRow['Tax ID'] = taxID
         #print('New Leagal is: '+T+R+S+desc)
         data = data.append(newRow, ignore_index = True)
 
