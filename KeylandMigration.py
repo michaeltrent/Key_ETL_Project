@@ -33,13 +33,10 @@ from glob import glob
 import win32com.client as win32
 from win32com.client import constants
 import shutil
-import fitz
 from PIL import Image
 import pytesseract
-import sys
 from pdf2image import convert_from_path
 import os
-import io
 import nltk
 from nltk import word_tokenize
 import cv2
