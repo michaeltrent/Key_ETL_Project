@@ -214,7 +214,7 @@ def LPROCR(path, saveLoc):
     os.chdir(saveLoc)
     
     file = os.path.abspath(path)
-    LPG = path[path.find('\\')+1::]
+    LPG = path[path.find('\\')+1:path.find('.pdf')]
     #Convert the pages to images
     pages = convert_from_path(file, 500, poppler_path = poppler_path)
     #Initialize a counter for the images
@@ -343,7 +343,7 @@ if getPages:
     
 #%% Run the OCR
 
-runOCR = True
+runOCR = False
 
 if runOCR:
     
@@ -356,7 +356,7 @@ if runOCR:
 
 #%% If needed re-name the files once OCRed to include RecNum
 
-LPRTextRename = True
+LPRTextRename = False
 
 #Find the LPGs on the M Drive:
 path = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs' 
@@ -370,6 +370,8 @@ for path in paths:
         #Define a parameter to find the first string of 6 digits after the Bk-Pg
         #character. That will be the rec num.
         recLoc = text.find('Bk-Pg')
+        if recLoc == 0:
+            recLoc = text.find('Recording Info')
         if recLoc !=0:
             recFound = False
             numIter = 0
@@ -458,7 +460,7 @@ data = pd.DataFrame(columns = klData.columns)
 #%% Parse the legal to create a full legal for each line
 
 LPRpath = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs' 
-LPRpaths =[f for f in glob(path + '/**\\*.txt', recursive=True)]
+LPRpaths =[f for f in glob(LPRpath + '/**\\*.txt', recursive=True)]
 
 for row in range(0,klData.shape[0]):
     legal = klData.iloc[row, klData.columns.get_loc('Description_Lease_2')]
@@ -491,6 +493,8 @@ for row in range(0,klData.shape[0]):
             S = '0'+S
         legal = legal[legal.find('Sec')::]
         desc = Sec[Sec.find(':')+2::]
+        phoneNum = np.nan
+        taxID = np.nan
         #Copy the data from the KL Data set to append into the new data set
         newRow = klData.loc[klData['LeaseNumberCalc'] == klData.iloc[row, klData.columns.get_loc('LeaseNumberCalc')]]
         #If there is no Rec Number, then replace the NaN with 999999
@@ -507,7 +511,7 @@ for row in range(0,klData.shape[0]):
             print('Unable to process lease ' + lease)
         try:
             for path in LPRpaths:
-                if path.count(lease):
+                if path.count(str(int(lease))):
                     with open(path, 'r', errors='ignore') as file:
                         text = file.read()
                         # Create a slice of the text to search for Tax ID number. 
@@ -528,12 +532,14 @@ for row in range(0,klData.shape[0]):
         newRow['MOR'] = MOR
         newRow['Phone Number'] = phoneNum
         newRow['Tax ID'] = taxID
+        print(newRow['Phone Number'])
         #print('New Leagal is: '+T+R+S+desc)
         data = data.append(newRow, ignore_index = True)
 
 #%% Save data in excel
 #del data['Description_Lease']
-del data['Description_Lease_2']
+os.chdir('C:/Users/micha/Documents/LTE/Keyland_Migration_Project')
+#del data['Description_Lease_2']
 
 newExcelName = 'KODA_UNION_LEASES_NEW_FORMAT.xlsx'
 data.to_excel(os.path.join(dataPath, newExcelName), index = False)
