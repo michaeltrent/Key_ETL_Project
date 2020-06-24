@@ -237,35 +237,35 @@ def LPROCR(path, saveLoc):
             fileName = "page_"+str(i)+".jpeg"
             # Do some preprocessing to remove gridlines and noise
             img = cv2.imread(fileName)
-            # resultImage = img.copy()
-            # # Convert the image to grayscale
-            # grayimg = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            # gray=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-            # linek = np.zeros((11,11),dtype=np.uint8)
-            # linek[...,5]=1
-            # #x=cv2.morphologyEx(gray, cv2.MORPH_OPEN, linek ,iterations=1)
-            # #gray-=x
-            # #cv2.imshow('gray',gray)
-            # #cv2.waitKey(0)
-            # img=gray
-            # #img = cv2.medianBlur(img,5)
-            # # Try to remove the grid lines to avoid breaking the pages into two
-            # laplacian = cv2.Laplacian(grayimg,cv2.CV_8UC1) # Laplacian Edge Detection
-            # minLineLength = 900
-            # maxLineGap = 100
-            # lines = cv2.HoughLinesP(laplacian,1,np.pi/180,100,minLineLength,maxLineGap)
-            # for line in lines:
-            #     for x1,y1,x2,y2 in line:
-            #         cv2.line(grayimg,(x1,y1),(x2,y2),(255,255,255),1)
-            # ## Invert the image
-            # #ret,grayimg = cv2.threshold(grayimg,127,255,cv2.THRESH_BINARY_INV)
-            # ## Filter on threshold
-            # #img = cv2.threshold(grayimg, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-            # ## Define the kernel
-            # kernel = np.ones((5,5),np.uint8)
-            # # Perform a morphological opening
-            # #img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
-            ## Dilate the text
+            resultImage = img.copy()
+            # Convert the image to grayscale
+            grayimg = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            gray=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+            linek = np.zeros((11,11),dtype=np.uint8)
+            linek[...,5]=1
+            #x=cv2.morphologyEx(gray, cv2.MORPH_OPEN, linek ,iterations=1)
+            #gray-=x
+            #cv2.imshow('gray',gray)
+            #cv2.waitKey(0)
+            img=gray
+            #img = cv2.medianBlur(img,5)
+            # Try to remove the grid lines to avoid breaking the pages into two
+            laplacian = cv2.Laplacian(grayimg,cv2.CV_8UC1) # Laplacian Edge Detection
+            minLineLength = 900
+            maxLineGap = 100
+            lines = cv2.HoughLinesP(laplacian,1,np.pi/180,100,minLineLength,maxLineGap)
+            for line in lines:
+                for x1,y1,x2,y2 in line:
+                    cv2.line(grayimg,(x1,y1),(x2,y2),(255,255,255),1)
+            ## Invert the image
+            #ret,grayimg = cv2.threshold(grayimg,127,255,cv2.THRESH_BINARY_INV)
+            ## Filter on threshold
+            #img = cv2.threshold(grayimg, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+            ## Define the kernel
+            kernel = np.ones((5,5),np.uint8)
+            # Perform a morphological opening
+            #img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
+            # Dilate the text
             #img = cv2.morphologyEx(img, cv2.MORPH_DILATE, kernel)
             text = str(((pytesseract.image_to_string(img)))) 
             #text = text.replace('-\n', '')
@@ -343,67 +343,69 @@ if getPages:
     
 #%% Run the OCR
 
-runOCR = False
+runOCR = True
 
 if runOCR:
     
     path = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs' 
     paths =[f for f in glob(path + '/**\\*.pdf', recursive=True)]
     
-    for path in paths:
+    for path in paths[186::]:
         print('Processing: ' + path)
         LPROCR(path, 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs/LPG_Texts')
 
 #%% If needed re-name the files once OCRed to include RecNum
 
-LPRTextRename = False
+LPRTextRename = True
 
-#Find the LPGs on the M Drive:
-path = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs' 
+if LPRTextRename:
 
-#paths =[f for f in glob(path + '/**\\*.pdf', recursive=True) if 'Final Lease Package Sent' in f]
-paths =[f for f in glob(path + '/**\\*.txt', recursive=True)]
-
-for path in paths:
-    with open(path, 'r', errors='ignore') as file:
-        text = file.read()#.replace('\n', '')
-        #Define a parameter to find the first string of 6 digits after the Bk-Pg
-        #character. That will be the rec num.
-        recLoc = text.find('Bk-Pg')
-        if recLoc == 0:
-            recLoc = text.find('Recording Info')
-        if recLoc !=0:
-            recFound = False
-            numIter = 0
-            while not recFound:
-                if text[recLoc:recLoc+6].isdigit():
-                    recNum = text[recLoc:recLoc+6]
-                    recFound = True
-                numIter += 1
-                recLoc += 1
-                if numIter == 100:
-                    #if the num iters is high, then break out of the while loop. 
-                    recNum = np.nan
-                    break
-    try:
-        recNum = int(recNum)
-        if not math.isnan(int(recNum)):
-            print('Renaming file: ' + path)
-            print('New file name: ' + path[0:path.find('.txt')]+str(recNum)+'.txt')
-        
-            os.rename(path, os.path.abspath(path[0:path.find('.txt')]+str(recNum)+'.txt'))
-        else:
-            print('No reception number found for: ' + path)
-    except:
-        print('No Rec Number found for file: ' + path)
+    #Find the LPGs on the M Drive:
+    path = 'C:/Users/micha/Documents/LTE/Keyland_Migration_Project/LPRs' 
     
-    try:
-        basePath = path[0:path.rfind('\\')]
-        fileName = path[path.rfind('\\')+1::]
-        shutil.move(path, os.path.abspath(basePath + '/' + 'No_Rec_Num/' + fileName))
-    except:
-        print('Counld Not Move: ' + path)
+    #paths =[f for f in glob(path + '/**\\*.pdf', recursive=True) if 'Final Lease Package Sent' in f]
+    paths =[f for f in glob(path + '/**\\*.txt', recursive=True)]
+    
+    for path in paths:
+        with open(path, 'r', errors='ignore') as file:
+            text = file.read()#.replace('\n', '')
+            #Define a parameter to find the first string of 6 digits after the Bk-Pg
+            #character. That will be the rec num.
+            recLoc = text.find('Bk-Pg')
+            if recLoc == -1:
+                recLoc = text.upper().find('RECORDING INFO')
+            if recLoc !=-1:
+                recFound = False
+                numIter = 0
+                while not recFound:
+                    if text[recLoc:recLoc+6].isdigit():
+                        recNum = text[recLoc:recLoc+6]
+                        recFound = True
+                    numIter += 1
+                    recLoc += 1
+                    if numIter == 100:
+                        #if the num iters is high, then break out of the while loop. 
+                        recNum = np.nan
+                        break
+        try:
+            recNum = int(recNum)
+            if not math.isnan(int(recNum)):
+                print('Renaming file: ' + path)
+                print('New file name: ' + path[0:path.find('.txt')]+str(recNum)+'.txt')
+            
+                os.rename(path, os.path.abspath(path[0:path.find('.txt')]+str(recNum)+'.txt'))
+            else:
+                print('No reception number found for: ' + path)
+        except:
+            print('No Rec Number found for file: ' + path)
         
+        try:
+            basePath = path[0:path.rfind('\\')]
+            fileName = path[path.rfind('\\')+1::]
+            #shutil.move(path, os.path.abspath(basePath + '/' + 'No_Rec_Num/' + fileName))
+        except:
+            print('Counld Not Move: ' + path)
+            
 
         
 #%%Function to read the output from the OCRed LPRs 
